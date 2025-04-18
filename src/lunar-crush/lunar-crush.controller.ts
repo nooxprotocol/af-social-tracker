@@ -1,10 +1,10 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Query, Param } from '@nestjs/common';
 import {
   ApiOperation,
-  ApiParam,
   ApiQuery,
   ApiResponse,
   ApiTags,
+  ApiParam,
 } from '@nestjs/swagger';
 import { LunarCrushService } from './lunar-crush.service';
 import {
@@ -17,7 +17,8 @@ import { PostDataDto } from './dto/post-data.dto';
 import { TopicPostsQueryDto } from './dto/topic-posts-query.dto';
 import { SearchResponseDto } from './dto/search-response.dto';
 import { SearchJsonDto, SearchJsonSwaggerInputDto } from './dto/search.dto';
-import { TimeSeriesResponseDto } from './dto/time-series-response.dto';
+import { TransformedTimeSeriesResponseDto } from './dto/transformed-time-series.dto';
+import { NewsResponseDto } from './dto/news-response.dto';
 
 @ApiTags('LunarCrush')
 @Controller('lunar-crush')
@@ -100,26 +101,48 @@ export class LunarCrushController {
   }
 
   @Get('topic-time-series')
-  @ApiOperation({ summary: '토픽 시계열 데이터 조회' })
+  @ApiOperation({ summary: 'Get topic time series data' })
   @ApiQuery({
     name: 'topic',
     required: true,
-    description: '토픽 심볼 (예: BTC, ETH)',
+    description: '토픽 심볼 (예: BTC)',
   })
   @ApiQuery({
     name: 'bucket',
     required: false,
     description: '시간 간격 (예: day, hour)',
   })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: '반환할 최신 데이터 포인트 수 (기본값: 전체)',
+    type: Number,
+  })
   @ApiResponse({
     status: 200,
-    description: '토픽 시계열 데이터',
-    type: TimeSeriesResponseDto,
+    description: 'Returns transformed time series data',
+    type: TransformedTimeSeriesResponseDto,
   })
   async getTopicTimeSeries(
     @Query('topic') topic: string,
     @Query('bucket') bucket?: string,
-  ): Promise<TimeSeriesResponseDto> {
-    return this.lunarCrushService.getTopicTimeSeries(topic, bucket);
+    @Query('limit') limit?: number,
+  ): Promise<TransformedTimeSeriesResponseDto> {
+    return this.lunarCrushService.getTopicTimeSeries(topic, bucket, limit);
+  }
+
+  @Get('topic/:topic/news')
+  @ApiOperation({
+    summary: '토픽 뉴스 조회',
+    description: '특정 토픽에 대한 뉴스 데이터를 조회합니다.',
+  })
+  @ApiParam({ name: 'topic', description: '토픽 심볼 (예: BTC, ETH)' })
+  @ApiResponse({
+    status: 200,
+    description: '뉴스 데이터',
+    type: NewsResponseDto,
+  })
+  async getTopicNews(@Param('topic') topic: string): Promise<NewsResponseDto> {
+    return this.lunarCrushService.getTopicNews(topic);
   }
 }

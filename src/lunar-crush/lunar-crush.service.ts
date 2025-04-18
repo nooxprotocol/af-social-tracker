@@ -9,6 +9,11 @@ import {
 import { HttpService } from '@nestjs/axios';
 import { isEmptyObject } from 'src/utils/object.utils';
 import { TimeSeriesResponseDto } from './dto/time-series-response.dto';
+import {
+  TransformedTimeSeriesResponseDto,
+  TransformedTimeSeriesDataDto,
+} from './dto/transformed-time-series.dto';
+import { NewsResponseDto } from './dto/news-response.dto';
 
 @Injectable()
 export class LunarCrushService {
@@ -126,22 +131,80 @@ export class LunarCrushService {
       },
     );
 
-    return response.data;
+    // Add creator_id to each item in the response data
+    const transformedData = response.data.data.map(item => ({
+      ...item,
+      creator_id: item.text.split(' ')[0] || '',
+    }));
+
+    return {
+      ...response.data,
+      data: transformedData,
+    };
   }
 
   async getTopicTimeSeries(
     topic: string,
     bucket?: string,
-  ): Promise<TimeSeriesResponseDto> {
+    limit?: number,
+  ): Promise<TransformedTimeSeriesResponseDto> {
     const params: Record<string, string> = {};
 
     if (bucket) {
       params.bucket = bucket;
     }
 
-    return this.makeRequest<TimeSeriesResponseDto>(
+    const response = await this.makeRequest<TimeSeriesResponseDto>(
       `/topic/${topic}/time-series/v2`,
       params,
     );
+
+    // 데이터 변환 로직
+    const transformedData = new TransformedTimeSeriesDataDto();
+
+    // 모든 가능한 키 목록 (time 제외)
+    const possibleKeys = [
+      'contributors_active',
+      'contributors_created',
+      'interactions',
+      'posts_active',
+      'posts_created',
+      'sentiment',
+      'spam',
+      'alt_rank',
+      'close',
+      'galaxy_score',
+      'high',
+      'low',
+      'market_cap',
+      'market_dominance',
+      'open',
+      'volume_24h',
+    ];
+
+    // 데이터 제한 (limit이 지정된 경우)
+    let dataToProcess = response.data;
+    if (limit && limit > 0) {
+      // 최신 데이터 n개만 선택 (배열의 마지막 n개)
+      dataToProcess = response.data.slice(-limit);
+    }
+
+    // time 배열 초기화
+    transformedData.time = dataToProcess.map(item => item.time);
+
+    // 각 키별로 배열 생성
+    possibleKeys.forEach(key => {
+      transformedData[key] = dataToProcess.map(item => item[key] ?? 0);
+    });
+
+    return {
+      data: transformedData,
+      topic: response.topic,
+      bucket: response.bucket,
+    };
+  }
+
+  async getTopicNews(topic: string): Promise<NewsResponseDto> {
+    return this.makeRequest<NewsResponseDto>(`/topic/${topic}/news/v1`);
   }
 }
